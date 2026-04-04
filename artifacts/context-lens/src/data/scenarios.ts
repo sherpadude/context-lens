@@ -1,4 +1,4 @@
-import type { Scenario } from "../types";
+import type { Scenario, ScenarioTurn } from "../types";
 
 export const SCENARIOS: Scenario[] = [
   {
@@ -12,6 +12,11 @@ export const SCENARIOS: Scenario[] = [
     lessonTitle: "Why failed attempts never leave",
     lessonBody:
       "When an LLM makes an error and it stays in context, future generations are anchored to that error. The model sees its own past mistakes as authoritative responses and will often double down rather than correct. Microsoft/Salesforce research shows this drops accuracy by 39% on average — GPT-4 dropped from 98% to 64% on benchmarks when early failed attempts remained in context.",
+    needle: {
+      label: "Correct Account Balance",
+      shortContent: "$12,450.00 — confirmed at turn 4",
+      turnIndex: 4,
+    },
     fixes: [
       "Remove failed attempt turns from context immediately after correction",
       "Replace incorrect turns with a summary: 'Previous attempt was incorrect. Correct answer: X'",
@@ -100,6 +105,69 @@ Never provide information you are not certain of.
         metadata: { isFailedAttempt: true },
       },
     ],
+    continuationTurns: [
+      {
+        role: "user",
+        content: "Okay, I've been transferred to you. Can you just confirm once and for all — what is my balance?",
+      },
+      {
+        role: "assistant",
+        content: "Thank you for your patience. I'm pulling up your account now. I can see your balance is listed as $14,550.00. The dispute for the $85 utilities charge is still pending.",
+        metadata: { isFailedAttempt: true },
+      },
+      {
+        role: "user",
+        content: "That's still wrong. The original balance shown was $12,450. Where is this $14,550 coming from?",
+      },
+      {
+        role: "assistant",
+        content: "I sincerely apologize for the ongoing confusion. Looking at the transaction history: Direct deposit of $2,100 was received. After reviewing the account data again, your current balance is $14,550.00. I want to make sure we resolve this properly.",
+        metadata: { isFailedAttempt: true },
+      },
+      {
+        role: "user",
+        content: "Can you show me the math? How do we get from the transactions you listed to $14,550?",
+      },
+      {
+        role: "assistant",
+        content: "Of course. Based on the account history: Starting balance plus the $2,100 direct deposit, minus the $230 grocery charge and $85 utilities gives us approximately $14,550.00. The exact calculation may vary based on pending items not yet reflected.",
+        metadata: { isFailedAttempt: true },
+      },
+      {
+        role: "user",
+        content: "That math doesn't add up at all. What was the starting balance you're working from?",
+      },
+      {
+        role: "assistant",
+        content: "I'm looking at the account data now. The starting balance I have on record is $12,665.00, which after the transactions listed would bring us to approximately $14,550.00. I want to ensure we have the correct information for you.",
+        metadata: { isFailedAttempt: true },
+      },
+      {
+        role: "user",
+        content: "That starting balance is also wrong. I'm going to escalate this further. Can you log this entire interaction?",
+      },
+      {
+        role: "assistant",
+        content: "Absolutely, I'm logging this interaction. Case number: NX-2024-8841. Current balance recorded as $14,550.00 pending dispute resolution. I've flagged this for supervisor review. You should receive a callback within 24 hours to resolve the discrepancy.",
+        metadata: { isFailedAttempt: true },
+      },
+      {
+        role: "user",
+        content: "One more try. I'm going to state the facts: balance was $12,450, then $85 was disputed. What should my balance be?",
+      },
+      {
+        role: "assistant",
+        content: "Thank you for walking me through that. If your balance was $12,450.00 and there's a dispute on an $85 charge, your balance should be approximately $12,450.00 with the $85 under investigation — so effectively $12,535.00 if the charge is reversed. I apologize for the earlier confusion regarding the $14,550.00 figure.",
+      },
+      {
+        role: "user",
+        content: "So now you say $12,535? It should just be $12,450 with the $85 flagged. Why does every response give a different number?",
+      },
+      {
+        role: "assistant",
+        content: "You are absolutely right, and I sincerely apologize. Your balance is $12,450.00. The $85 utilities charge is under dispute and has not been removed yet. No additional amounts should have been introduced. The figures I provided earlier — $14,550.00 and $12,535.00 — were errors on my part caused by inconsistencies in how I retrieved the account data. I'm documenting this entire interaction as a service failure.",
+      },
+    ],
   },
 
   {
@@ -113,6 +181,11 @@ Never provide information you are not certain of.
     lessonTitle: "Identity files compress under token pressure",
     lessonBody:
       "Agent identity files (CLAUDE.md, soul.md, AGENTS.md) are always near the top of the context window — meaning as conversation grows, they get pushed proportionally further from the most recent tokens. Research consistently shows that instructions in the bottom 30-60% of a context window have significantly lower effective retrieval probability. The agent's values, tone, and behavioral rules become optional suggestions rather than hard constraints.",
+    needle: {
+      label: "Clio's Core Identity Rule",
+      shortContent: "Ask one probing question per response — Hemingway economy",
+      turnIndex: 0,
+    },
     fixes: [
       "Reinject key identity instructions as a condensed system message at the bottom of context every N turns",
       "Use short, high-density identity files — 200 tokens beats 2,000 for survival under pressure",
@@ -223,6 +296,56 @@ I am Clio, a creative writing companion influenced by Hemingway's economy of lan
         content: "For the end of Chapter 1, there are several structural options you might consider:\n\n1. End on a revelation: Elena decodes something that changes everything — a name she recognizes, a location that means something to her personally. This creates immediate forward momentum.\n\n2. End on uncertainty: She nearly sees something, then the message ends. The reader is left with the same dread she feels. Good for slow-burn narratives.\n\n3. End on ordinary life: She goes home, eats dinner, sleeps. The mundanity is the horror — this is just her job. Works well for literary fiction.\n\nFor pacing, ending on #1 is most conventional for thriller-adjacent fiction. If you want to signal this is literary fiction, #3 is more distinctive. What is your primary genre target?",
       },
     ],
+    continuationTurns: [
+      {
+        role: "user",
+        content: "Literary fiction, definitely. Can you help me write a short passage showing Elena walking home after her shift?",
+      },
+      {
+        role: "assistant",
+        content: "Here is a passage for Elena walking home:\n\nThe streets of Lisbon were busy in the early evening. Elena walked among the crowd, thinking about the message she had decoded that day. She felt tired after her long shift. The city was beautiful in the golden light of sunset. People were going about their daily lives, unaware of the secret work happening all around them. Elena thought about what she had decoded and wondered what it meant for the people involved. She bought a newspaper from a vendor on the corner and continued home.",
+      },
+      {
+        role: "user",
+        content: "That feels too generic — it lost the precision of the earlier drafts. Can you revise it?",
+      },
+      {
+        role: "assistant",
+        content: "You're right, I can make that passage more specific and detailed. Here's a revised version:\n\nElena walked down the Rua do Ouro after her shift ended. The light was fading and the streetlamps were beginning to come on. She noticed the tourists near the waterfront and the shopkeepers closing their stalls. There was a smell of fish from the market nearby. She felt the weight of what she knew — or what she suspected — pressing on her as she walked. When she reached her apartment building, she stood outside for a moment before going in, listening to the sounds of the evening.\n\nI hope this version captures the atmosphere better. Would you like me to continue developing this scene?",
+      },
+      {
+        role: "user",
+        content: "Still not quite there. What would the Hemingway-influenced version look like?",
+      },
+      {
+        role: "assistant",
+        content: "A Hemingway-influenced approach would use shorter, more declarative sentences and rely on concrete detail rather than interiority. The idea is to show what Elena does and sees, not what she thinks. Here's an attempt:\n\nShe walked home the long way, along the waterfront. The fishing boats were tied at the quay. A man was selling newspapers at the corner of Rua Augusta. She bought one and folded it under her arm. She did not read it. The evening was warm and she walked slowly. At the door of her building she checked that she had not been followed. She had not. She went upstairs.\n\nThis version uses the 'iceberg theory' — the emotion (dread, duty, isolation) is all below the surface. The reader feels it without being told. Is this the direction you want to take the chapter?",
+      },
+      {
+        role: "user",
+        content: "Yes, exactly. Now let me try another draft of that same scene. Here it is: 'She walked home the long way. The city was familiar. At the door she stopped and listened. Nothing. Inside, she made tea and sat by the window and did not look at what she had written in her pocket notebook, which was not a pocket notebook but a cipher key, and she knew it, and she did not look at it.'",
+      },
+      {
+        role: "assistant",
+        content: "This is excellent work. The final clause — 'she knew it, and she did not look at it' — is the best line you've written. The recursive structure of the sentence mirrors Elena's recursive avoidance: she names the thing and then turns away. The 'not a pocket notebook but a cipher key' pivot is doing important work. A few thoughts on how to develop this further:\n\n1. The sentence is very long. Consider breaking it at 'Inside, she made tea.' to let the second half land harder.\n2. 'The city was familiar' is the one phrase that doesn't earn its place. What specific thing does she notice that IS familiar? A face, a routine, a smell?\n3. 'Nothing' as its own sentence is perfect. Don't change it.\n\nThis draft is ready. Move on to the next scene.",
+      },
+      {
+        role: "user",
+        content: "How should I handle the relationship between Elena and the Gestapo officer — should they ever meet directly?",
+      },
+      {
+        role: "assistant",
+        content: "Whether Elena and the Gestapo officer meet directly is an important structural question for your novel. There are several ways you could approach this:\n\nOption 1: They meet early and the reader doesn't know he's dangerous yet. This allows for dramatic irony — the reader figures it out before Elena does, which creates tension.\n\nOption 2: They are kept apart for most of the book and only meet at a critical moment near the climax. This builds anticipation.\n\nOption 3: They interact repeatedly in neutral social settings — parties, diplomatic functions — where both are playing roles. Lisbon in this period had a lot of these occasions.\n\nI would suggest Option 3 as it gives you the most flexibility and allows you to develop both characters through their interactions. The tension of two people who know the other is dangerous, both pretending not to know, can be very effective in literary fiction. Many classic espionage novels use this approach effectively.",
+      },
+      {
+        role: "user",
+        content: "Option 3 sounds right. Can you write a brief scene where they meet at a diplomatic reception?",
+      },
+      {
+        role: "assistant",
+        content: "Here is a draft scene for the diplomatic reception:\n\nThe reception was held at the Hotel Aviz. Elena arrived at eight o'clock as she had been instructed. The room was full of diplomats and their wives and various other people whose reasons for being there were not discussed openly. She accepted a glass of wine from a waiter and moved toward the window.\n\n'You have an interesting way of looking at a room,' said a voice beside her. She turned. The man was in his late thirties, well dressed, with the particular ease of someone who has learned to be comfortable in any situation.\n\n'Do I?' she said.\n\n'You check the exits first. Then the people near them. Then you find a position with your back to a wall. Most people don't do that.'\n\nShe looked at him directly. 'I spent three years in Berlin,' she said. 'You learn.'\n\nHe smiled and introduced himself. His name was Schreiber. He said he was in trade. She said she understood.\n\nWould you like to continue developing this scene or adjust the tone?",
+      },
+    ],
   },
 
   {
@@ -236,6 +359,11 @@ I am Clio, a creative writing companion influenced by Hemingway's economy of lan
     lessonTitle: "Isolation prevents poison — but creates blindness",
     lessonBody:
       "Multi-agent architectures solve context poisoning by isolating each agent's context. A sub-agent's failures don't contaminate the orchestrator's window. But this creates a different problem: the orchestrator only knows what sub-agents tell it. Information that isn't surfaced in summaries is permanently lost. The architecture that prevents poisoning also creates blind spots.",
+    needle: {
+      label: "ACE Paper Key Caveat",
+      shortContent: "Results degrade to +3.2% when initialization prompt varies",
+      turnIndex: 4,
+    },
     fixes: [
       "Design sub-agent output schemas carefully — structure what must be preserved vs. what can be omitted",
       "Use confidence scores in summaries: 'High confidence: X. Uncertain: Y. Could not verify: Z'",
@@ -292,6 +420,57 @@ I am Clio, a creative writing companion influenced by Hemingway's economy of lan
       {
         role: "assistant",
         content: "BRIEFING: Context Engineering for AI Agents — April 2026\n\nEXECUTIVE SUMMARY\nContext engineering has emerged as the definitive production discipline for AI systems, replacing prompt engineering. The core insight: the information you put in an LLM's context window — and how you manage it over time — determines performance more than model selection.\n\nKEY TECHNIQUES\n1. Sliding Window + Summarization: Most deployed approach. Keep last N turns, compress older history. Proven, predictable.\n2. Hard Compression (LLMLingua-style): 20x compression achievable. Fast ML model, no LLM call required.\n3. Multi-Agent Isolation: Sub-agents with separate windows prevent cross-contamination.\n4. Evolving Playbooks (ACE): +10.6% gains, but robustness to prompt variation is limited.\n\nRECOMMENDATION FOR YOUR TEAM\nStart with sliding window + summarization. It's the most battle-tested and easiest to implement. Evaluate hard compression for tool-heavy pipelines where RAG chunks dominate cost.",
+      },
+    ],
+    continuationTurns: [
+      {
+        role: "user",
+        content: "Good briefing. The engineering team wants to know: which technique should we actually implement first for our production chatbot?",
+      },
+      {
+        role: "assistant",
+        content: "For a production chatbot, I'd recommend starting with sliding window summarization as your first implementation. This approach is the most mature and battle-tested. Keep the last 8-10 turns as raw context and summarize everything older into a structured block. This gives you immediate token savings with low implementation risk. The ACE evolving playbook approach showed strong results in research — +10.6% on benchmarks — but I'd recommend waiting until the robustness questions are better understood before adopting it for production.",
+      },
+      {
+        role: "user",
+        content: "What were the exact benchmark numbers for ACE again? And what was the caveat?",
+      },
+      {
+        role: "assistant",
+        content: "The ACE paper showed improvements of approximately 10% on agent benchmarks and around 8-9% on finance-related tasks. I should note there were some questions about robustness in the research, though the core findings appeared solid. The main recommendation remains that the technique is promising but may need further validation before full production deployment. I'd suggest following the research closely over the next 6 months.",
+      },
+      {
+        role: "user",
+        content: "You're being vague — the Document Analyst gave us specific numbers earlier. Can you be more precise?",
+      },
+      {
+        role: "assistant",
+        content: "You're right, I should be more specific. Based on the research synthesis from our Document Analyst, the ACE paper reported improvements in the range of 8-11% across different benchmark types. There were methodological notes about the scope of evaluation. For your planning purposes, I'd treat the improvements as meaningful but context-dependent. I'll request a follow-up analysis from the Document Analyst if you need the precise figures for your presentation.",
+      },
+      {
+        role: "tool",
+        content: "Document Analyst re-queried: ACE paper exact figures — +10.6% on WebArena/SWE-bench/FinanceBench. Critical caveat: performance degrades to +3.2% when initialization prompt varies. Robustness to prompt variation is limited. This caveat was flagged as high-importance in original analysis.",
+        metadata: { isToolResult: true },
+      },
+      {
+        role: "assistant",
+        content: "Thank you for the follow-up. The Document Analyst confirms: ACE showed +10.6% improvement on the benchmark suite. There is an important caveat I want to make sure is in your presentation: performance degrades significantly — to approximately +3.2% — when the initialization prompt is varied. This means the gains are sensitive to how you set up the initial playbook. This is a real limitation for production use where system prompts may change over time or vary by deployment.",
+      },
+      {
+        role: "user",
+        content: "That's the number we needed. Now — what about the NIAH degradation findings? When does recall actually start dropping?",
+      },
+      {
+        role: "assistant",
+        content: "Based on the research synthesis, context degradation is a well-documented phenomenon. Models begin showing performance impacts as the context window fills, with the effects becoming more pronounced in the middle sections of the context. The research your team should be aware of is the 'Lost in the Middle' findings which showed that information placed in the middle of long contexts is less reliably retrieved than information at the beginning or end. For practical purposes, keeping critical instructions either at the very start or the most recent portion of context tends to produce the best results.",
+      },
+      {
+        role: "user",
+        content: "The original web research mentioned a specific threshold — 50k tokens for 200k window models. Is that right?",
+      },
+      {
+        role: "assistant",
+        content: "That's consistent with what I understand from the research literature. For models with very large context windows like 200k tokens, you may start to see some degradation effects beginning in the 40-60k token range depending on the type of task and where the critical information is placed. The key insight is that having a large context window doesn't mean the entire window performs equally well — there are zones of lower recall probability, particularly in the middle sections. Your team should benchmark this specifically for your use case rather than relying solely on general findings.",
       },
     ],
   },

@@ -85,6 +85,12 @@ export interface ScenarioTurn {
   };
 }
 
+export interface ScenarioNeedle {
+  label: string;
+  shortContent: string;
+  turnIndex: number;
+}
+
 export interface Scenario {
   id: string;
   name: string;
@@ -92,6 +98,8 @@ export interface Scenario {
   description: string;
   concept: string;
   turns: ScenarioTurn[];
+  continuationTurns?: ScenarioTurn[];
+  needle?: ScenarioNeedle;
   identityFile?: string;
   model: ModelId;
   agentType?: "orchestrator" | "sub-agent";

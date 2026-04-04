@@ -1,76 +1,94 @@
 # Contributing to ContextLens
 
-Thank you for your interest in contributing! ContextLens is an open-source tool for visualizing LLM context window management, and we welcome contributions from the community.
+Thank you for your interest in contributing to ContextLens! This document explains how to get started, what to expect from the review process, and how our automated security gate works.
 
-## How to Contribute
+## Table of Contents
 
-### 1. Fork and Branch
+- [Getting Started](#getting-started)
+- [Branching & Pull Requests](#branching--pull-requests)
+- [The Automated Security Gate](#the-automated-security-gate)
+- [Code Style](#code-style)
+- [Reporting Bugs](#reporting-bugs)
+- [Feature Requests](#feature-requests)
 
-1. Fork the repository on GitHub
-2. Clone your fork locally:
+---
+
+## Getting Started
+
+1. **Fork** the repository on GitHub.
+2. **Clone** your fork locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/context-lens.git
+   git clone https://github.com/<your-username>/context-lens.git
    cd context-lens
    ```
-3. Create a feature branch from `main`:
+3. **Install dependencies** (requires [pnpm](https://pnpm.io/)):
    ```bash
-   git checkout -b feature/your-feature-name
+   pnpm install
    ```
-   Use descriptive branch names like `fix/niah-heatmap-model-scale` or `feat/export-csv`.
+4. **Start the development server:**
+   ```bash
+   pnpm --filter @workspace/context-lens run dev
+   ```
+5. Create a new branch for your change:
+   ```bash
+   git checkout -b feat/my-feature
+   ```
 
-### 2. Set Up the Project
+---
 
-```bash
-# Install dependencies
-pnpm install
+## Branching & Pull Requests
 
-# Start the development server
-pnpm --filter @workspace/context-lens run dev
-```
+- All changes **must** go through a pull request targeting `main`. Direct pushes to `main` are blocked.
+- Branch names should follow the convention: `feat/`, `fix/`, `docs/`, `chore/`.
+- Keep PRs focused — one logical change per PR.
+- Add a clear description of what changed and why.
+- Link any related issues using `Closes #<issue>` in the PR body.
 
-The app runs on the port set by the `PORT` environment variable (default: 5173).
+---
 
-### 3. Make Your Changes
+## The Automated Security Gate
 
-- Keep changes focused — one feature or fix per pull request
-- Follow the existing code style (TypeScript, functional React components)
-- All logic must remain client-side — no API keys, no backend calls
-- Do not introduce telemetry or external data collection
+Every pull request automatically runs a multi-stage security pipeline before it can be merged. Here is what happens and what you need to know:
 
-### 4. Open a Pull Request
+### Stage 1 — Secret Scanning
+We use [TruffleHog](https://github.com/trufflesecurity/trufflehog) to detect leaked API keys, tokens, credentials, and other secrets in your diff. **Do not commit secrets.** If you need to test with a real API key locally, use a `.env` file that is already in `.gitignore`.
 
-Push your branch to your fork and open a PR against `main` on this repository.
+### Stage 2 — Dependency Audit
+`npm audit --audit-level=high` is run across the entire monorepo. PRs that introduce high or critical severity dependency vulnerabilities will fail. If you are upgrading a dependency that has a known vulnerability, please note that explicitly in your PR description.
 
-**What to expect from the security gate:**
+### Stage 3 — CodeQL Static Analysis
+GitHub's CodeQL analyzes the JavaScript/TypeScript codebase for common vulnerability patterns (injection, prototype pollution, etc.). This runs on every PR and takes 2–5 minutes.
 
-Every pull request automatically triggers a multi-stage security pipeline before it can be merged:
+### Stage 4 — AI-Specific Pattern Scan
+A custom Node.js scanner checks for patterns that are especially risky in AI tooling:
+- Prompt injection strings (e.g., `ignore previous instructions`, `system:` overrides)
+- Hard-coded external URLs in `fetch`/`XMLHttpRequest` calls that are not the project's own API
+- Use of `eval()` or the `Function` constructor
 
-| Check | What it does |
-|-------|-------------|
-| **Secret Scan** | Detects leaked API keys, tokens, and credentials (TruffleHog) |
-| **Dependency Audit** | Flags known-vulnerable npm packages (`npm audit --audit-level=high`) |
-| **CodeQL Analysis** | Static analysis for JavaScript/TypeScript security issues |
-| **AI Pattern Scan** | Custom check for prompt injection strings, hardcoded external fetch targets, and `eval` misuse |
+If your PR fails this check legitimately (e.g., you are adding a test fixture with an injection string), leave a comment explaining the context and a maintainer can approve an exception.
 
-All four checks must pass before a merge is allowed. If any check fails, the PR will be blocked and you will see inline annotations explaining what was found. Fix the flagged issue and push a new commit — the checks will re-run automatically.
+### Stage 5 — Owner Approval Gate
+After all security checks pass, the workflow pauses and emails the repository owner for final approval. Only after they click **Approve** in GitHub does the merge status check turn green. This ensures a human reviews every merge into `main`.
 
-Once all checks pass, the repository owner receives an approval request via GitHub's notification system. Only after the owner approves does the merge proceed. This is intentional — it ensures every change to `main` has been reviewed by a human.
+**What this means for you:** After your PR passes all automated checks, you may need to wait up to 24 hours for the owner approval step. This is by design. You will see a pending status check called `Merge Gate / await-owner-approval` while it waits.
 
-### 5. What Makes a Good PR
+---
 
-- A clear title and description explaining *what* changed and *why*
-- No large unrelated refactors bundled in
-- Source files only — no build artifacts or `node_modules`
-- Tests or documented manual verification steps for non-trivial changes
+## Code Style
 
-## Code of Conduct
+- We use **Prettier** for formatting. Run `pnpm prettier --write .` before committing.
+- TypeScript strict mode is enabled. Do not use `any` unless absolutely necessary and documented.
+- Keep components small and composable.
+- All new logic should live in `src/lib/` as pure functions where possible.
 
-This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold its standards.
+---
 
-## Security Issues
+## Reporting Bugs
 
-Please do **not** open public GitHub issues for security vulnerabilities. See [SECURITY.md](SECURITY.md) for the responsible disclosure process.
+Please open a GitHub Issue. If the bug is security-related, follow the [Security Policy](SECURITY.md) instead of opening a public issue.
 
-## License
+---
 
-By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+## Feature Requests
+
+Open a GitHub Issue with the `enhancement` label. Describe the use case, not just the feature. We are especially interested in contributions that improve the educational value of the Explore mode scenarios or add new compression strategies to the Simulate mode.
