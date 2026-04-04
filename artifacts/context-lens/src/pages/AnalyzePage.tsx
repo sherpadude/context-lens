@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { SCENARIOS, SAMPLE_PROMPT_JSON } from "@/data/scenarios";
 import { MODEL_LIST } from "@/lib/models";
-import { ModelId, HealthReport } from "@/types";
+import { ModelId, HealthReport, ScoreHistoryEntry } from "@/types";
 import { parseInput } from "@/lib/parser";
 import { analyzeContext } from "@/lib/scoring";
 import {
@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { formatTokenCount, formatCost, estimateCost } from "@/lib/tokenizer";
 import { getSegmentColor } from "@/lib/segmentColors";
-import { saveToHistory } from "@/lib/history";
+import { saveToHistory, loadHistory } from "@/lib/history";
 import { useToast } from "@/hooks/use-toast";
 import type { PreloadedContext } from "@/App";
 import { encodeShareURL, exportReportPNG } from "@/lib/share";
@@ -33,12 +33,24 @@ export default function AnalyzePage({ onNavigateToExplore, preloadedContext, onP
   const [model, setModel] = useState<ModelId>("gpt4o");
   const [report, setReport] = useState<HealthReport | null>(null);
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  const [historyBest, setHistoryBest] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const applyReport = (r: HealthReport | null) => {
     setReport(r);
     onReportChange?.(r);
+    // Auto-persist each analysis to local history (capped at 10 internally)
+    if (r) {
+      const label = `${r.context.totalTokens.toLocaleString()} tok · ${r.context.segments.length} segs`;
+      saveToHistory(r, label);
+      // Update historyBest after saving
+      const entries = loadHistory();
+      if (entries.length >= 2) {
+        const best = Math.max(...entries.map((e: ScoreHistoryEntry) => e.score));
+        setHistoryBest(best);
+      }
+    }
   };
 
   // Auto-load and analyze when a preloaded context arrives (e.g. from Explore)
@@ -317,6 +329,36 @@ export default function AnalyzePage({ onNavigateToExplore, preloadedContext, onP
           </Button>
         </div>
       </div>
+
+      {/* Beat Your Score banner */}
+      {historyBest !== null && (
+        <div className={`mb-6 px-4 py-3 rounded-lg border text-sm flex items-center gap-3 ${
+          report.score > historyBest
+            ? "border-green-500/30 bg-green-950/20 text-green-300"
+            : report.score === historyBest
+            ? "border-blue-500/30 bg-blue-950/20 text-blue-300"
+            : "border-amber-500/20 bg-amber-950/10 text-amber-300/80"
+        }`}
+          data-testid="beat-your-score-banner"
+        >
+          {report.score > historyBest ? (
+            <>
+              <span className="text-lg">🏆</span>
+              <span><strong>New personal best!</strong> You beat your previous best of {historyBest} — great optimization.</span>
+            </>
+          ) : report.score === historyBest ? (
+            <>
+              <span className="text-lg">🎯</span>
+              <span>Matched your best score of <strong>{historyBest}</strong>. Follow the recommendations to push further.</span>
+            </>
+          ) : (
+            <>
+              <span className="text-lg">🎯</span>
+              <span>Your personal best is <strong>{historyBest}</strong>. Apply the recommendations below to beat it.</span>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-[280px_1fr] gap-6 items-start">
 

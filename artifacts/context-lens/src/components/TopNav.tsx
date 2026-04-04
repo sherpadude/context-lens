@@ -122,7 +122,7 @@ export default function TopNav({ activeMode, onModeChange, currentReport }: TopN
             </button>
 
             {/* History Dropdown */}
-            <DropdownMenu>
+            <DropdownMenu onOpenChange={(open) => { if (open) setHistory(loadHistory()); }}>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1.5 h-8 border-dashed text-xs" data-testid="button-history">
                   <Clock className="h-3.5 w-3.5 text-muted-foreground" />
