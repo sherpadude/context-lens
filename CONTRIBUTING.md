@@ -1,94 +1,65 @@
 # Contributing to ContextLens
 
-Thank you for your interest in contributing to ContextLens! This document explains how to get started, what to expect from the review process, and how our automated security gate works.
+Thank you for your interest in contributing! ContextLens is an open-source tool for visualizing LLM context window management, and we welcome contributions from researchers, builders, and developers.
 
-## Table of Contents
+## How to Contribute
 
-- [Getting Started](#getting-started)
-- [Branching & Pull Requests](#branching--pull-requests)
-- [The Automated Security Gate](#the-automated-security-gate)
-- [Code Style](#code-style)
-- [Reporting Bugs](#reporting-bugs)
-- [Feature Requests](#feature-requests)
+### 1. Fork and Clone
 
----
+```bash
+git clone https://github.com/sherpadude/context-lens.git
+cd context-lens
+pnpm install
+```
 
-## Getting Started
+### 2. Create a Branch
 
-1. **Fork** the repository on GitHub.
-2. **Clone** your fork locally:
-   ```bash
-   git clone https://github.com/<your-username>/context-lens.git
-   cd context-lens
-   ```
-3. **Install dependencies** (requires [pnpm](https://pnpm.io/)):
-   ```bash
-   pnpm install
-   ```
-4. **Start the development server:**
-   ```bash
-   pnpm --filter @workspace/context-lens run dev
-   ```
-5. Create a new branch for your change:
-   ```bash
-   git checkout -b feat/my-feature
-   ```
+Always create a feature branch from `main`. Never push directly to `main` — direct pushes are blocked.
 
----
+```bash
+git checkout -b feature/your-feature-name
+# or
+git checkout -b fix/issue-description
+```
 
-## Branching & Pull Requests
+### 3. Make Your Changes
 
-- All changes **must** go through a pull request targeting `main`. Direct pushes to `main` are blocked.
-- Branch names should follow the convention: `feat/`, `fix/`, `docs/`, `chore/`.
-- Keep PRs focused — one logical change per PR.
-- Add a clear description of what changed and why.
-- Link any related issues using `Closes #<issue>` in the PR body.
+- Keep changes focused and small where possible
+- Follow the existing code style (TypeScript, Tailwind, React)
+- All logic should remain client-side — no API keys or backend calls
+- Run `pnpm --filter @workspace/context-lens run dev` to test locally
 
----
+### 4. Open a Pull Request
 
-## The Automated Security Gate
+Push your branch and open a PR against `main`. Your PR will automatically trigger:
 
-Every pull request automatically runs a multi-stage security pipeline before it can be merged. Here is what happens and what you need to know:
+**Security Gate (required — all must pass before merge):**
+- Secret scanning — checks for leaked API keys or credentials
+- Dependency audit — `npm audit` for known vulnerabilities
+- CodeQL static analysis — JavaScript/TypeScript code quality
+- AI pattern scan — detects prompt injection strings, suspicious `eval` usage, and hard-coded external fetch targets
 
-### Stage 1 — Secret Scanning
-We use [TruffleHog](https://github.com/trufflesecurity/trufflehog) to detect leaked API keys, tokens, credentials, and other secrets in your diff. **Do not commit secrets.** If you need to test with a real API key locally, use a `.env` file that is already in `.gitignore`.
+**Owner Approval Gate:**
+After all security checks pass, the repository owner receives an email notification and must approve the merge before it can proceed. This is an intentional design choice for a security-focused tool.
 
-### Stage 2 — Dependency Audit
-`npm audit --audit-level=high` is run across the entire monorepo. PRs that introduce high or critical severity dependency vulnerabilities will fail. If you are upgrading a dependency that has a known vulnerability, please note that explicitly in your PR description.
+### 5. What to Expect
 
-### Stage 3 — CodeQL Static Analysis
-GitHub's CodeQL analyzes the JavaScript/TypeScript codebase for common vulnerability patterns (injection, prototype pollution, etc.). This runs on every PR and takes 2–5 minutes.
-
-### Stage 4 — AI-Specific Pattern Scan
-A custom Node.js scanner checks for patterns that are especially risky in AI tooling:
-- Prompt injection strings (e.g., `ignore previous instructions`, `system:` overrides)
-- Hard-coded external URLs in `fetch`/`XMLHttpRequest` calls that are not the project's own API
-- Use of `eval()` or the `Function` constructor
-
-If your PR fails this check legitimately (e.g., you are adding a test fixture with an injection string), leave a comment explaining the context and a maintainer can approve an exception.
-
-### Stage 5 — Owner Approval Gate
-After all security checks pass, the workflow pauses and emails the repository owner for final approval. Only after they click **Approve** in GitHub does the merge status check turn green. This ensures a human reviews every merge into `main`.
-
-**What this means for you:** After your PR passes all automated checks, you may need to wait up to 24 hours for the owner approval step. This is by design. You will see a pending status check called `Merge Gate / await-owner-approval` while it waits.
-
----
+- Automated checks run within ~2 minutes of opening a PR
+- If any check fails, the PR cannot be merged until the issue is resolved
+- Owner review happens within 48 hours for most PRs
+- Small, well-scoped PRs are reviewed and merged faster
 
 ## Code Style
 
-- We use **Prettier** for formatting. Run `pnpm prettier --write .` before committing.
-- TypeScript strict mode is enabled. Do not use `any` unless absolutely necessary and documented.
-- Keep components small and composable.
-- All new logic should live in `src/lib/` as pure functions where possible.
+- **TypeScript** everywhere — no `any` types without justification
+- **No backend dependencies** — ContextLens is intentionally client-side only
+- **No telemetry** — we don't track users, ever
+- Prefer descriptive variable names over comments
 
----
+## Reporting Security Issues
 
-## Reporting Bugs
+Please do **not** open a public issue for security vulnerabilities. See [SECURITY.md](SECURITY.md) for responsible disclosure guidelines.
 
-Please open a GitHub Issue. If the bug is security-related, follow the [Security Policy](SECURITY.md) instead of opening a public issue.
+## Questions?
 
----
-
-## Feature Requests
-
-Open a GitHub Issue with the `enhancement` label. Describe the use case, not just the feature. We are especially interested in contributions that improve the educational value of the Explore mode scenarios or add new compression strategies to the Simulate mode.
+Open a [GitHub Discussion](https://github.com/sherpadude/context-lens/discussions) or file an issue with the `question` label.

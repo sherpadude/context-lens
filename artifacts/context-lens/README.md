@@ -3,6 +3,8 @@
 **Spatially visualize LLM context window management.** An open-source, fully client-side tool for AI researchers and builders who want to understand what's really happening inside their model's context window.
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Security Gate](https://github.com/sherpadude/context-lens/actions/workflows/security-scan.yml/badge.svg)](https://github.com/sherpadude/context-lens/actions/workflows/security-scan.yml)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 ## What is ContextLens?
 
@@ -111,6 +113,26 @@ src/
 - **Multi-Agent Context Isolation** — leakage risks in orchestrator–subagent architectures
 - **Memory Injection Attacks** — how jailbreaks exploit context structure
 - **NIAH Degradation** — why models miss information at context boundaries
+
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a PR.
+
+All pull requests automatically trigger a **Security Gate** that includes:
+- Secret scanning (Gitleaks)
+- Dependency vulnerability audit (`pnpm audit`)
+- CodeQL static analysis
+- AI pattern scan (checks for prompt injection, suspicious eval, unexpected external fetches)
+
+PRs cannot be merged until all security checks pass **and** the repository owner approves.
+
+## Security
+
+If you find a vulnerability, please follow the [Security Policy](SECURITY.md) and **do not** open a public issue.
+
+## Code of Conduct
+
+This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
