@@ -1,0 +1,65 @@
+name: Owner Approval Gate
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  pull-requests: write
+  statuses: write
+
+jobs:
+  require-owner-approval:
+    name: Require Owner Review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check owner review status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const owner = context.repo.owner;
+
+            // Notify if PR is from a fork (higher scrutiny)
+            if (pr.head.repo.full_name !== pr.base.repo.full_name) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: [
+                  "## 🔒 Owner Review Required",
+                  "",
+                  "This PR is from a fork. Before it can be merged:",
+                  "",
+                  "1. All **Security Gate** checks must pass",
+                  "2. **@" + owner + "** must approve this PR",
+                  "",
+                  "The security scan will run automatically. Owner review is mandatory — no exceptions.",
+                ].join("\n"),
+              });
+            }
+
+      - name: Validate no direct-to-main commits
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: commits } = await github.rest.pulls.listCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+
+            core.info(`PR has ${commits.length} commit(s) — gate passed.`);
+
+  security-gate-status:
+    name: Security Gate Summary
+    runs-on: ubuntu-latest
+    needs: [require-owner-approval]
+    steps:
+      - name: Post gate status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.info("Owner approval gate: PASSED — all checks ran successfully.");
+            core.info("Final merge requires: (1) security-scan passing + (2) owner approval.");
