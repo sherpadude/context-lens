@@ -61,29 +61,20 @@ The app runs on port `24348` by default (configurable via `PORT` env var).
 
 ### Pushing to GitHub
 
-The `GITHUB_PERSONAL_ACCESS_TOKEN` secret is stored in Replit. Use it to push:
+The `GITHUB_PERSONAL_ACCESS_TOKEN` secret (with `workflow` scope) is stored in Replit. After each task the agent pushes changes to GitHub.
 
-```bash
-# Push to GitHub (token has workflow scope):
-git remote set-url origin "https://sherpadude:${GITHUB_PERSONAL_ACCESS_TOKEN}@github.com/sherpadude/context-lens.git"
-git push origin main
-
-# Or force-push (temporarily removes branch protection first):
-curl -s -X DELETE -H "Authorization: Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}" \
-  -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/sherpadude/context-lens/branches/main/protection"
-git push --force origin main
-node .github/scripts/setup-branch-protection.js  # re-apply protection
-```
-
-After each task, the agent pushes changed files to GitHub via the PAT.
-
-### Security Gate (GitHub Actions — all on GitHub)
-- `security-scan.yml` — Gitleaks + pnpm audit + CodeQL + OSSF Scorecard + AI pattern scan (changed files only on PRs)
-- `issue-triage.yml` — security keyword detection on issue open; posts SECURITY.md link
+### Security Gate (GitHub Actions)
+- `security-scan.yml` — Gitleaks + pnpm audit + CodeQL + OSSF Scorecard + AI pattern scan (changed PR files only)
+- `issue-triage.yml` — security keyword detection on issue open; adds label + posts SECURITY.md disclosure link
 - `merge-gate.yml` — triggers via `workflow_run` after Security Gate; uses `environment: production-merge` with @sherpadude as required reviewer
 
-### Branch Protection (applied via setup-branch-protection.js)
-Required status checks (exact names matching workflow job `name:` fields):
-- `Secret Scanning`, `Dependency Audit`, `CodeQL Static Analysis`, `OSSF Scorecard`, `AI Pattern Scan`, `Await Owner Approval`
-Required reviews: 1 (dismiss stale, require CODEOWNER = @sherpadude)
+### Branch Protection
+Applied via `.github/scripts/setup-branch-protection.js`. Required status check names (format: `<workflow name> / <job name>`):
+- `Security Gate / Secret Scanning`
+- `Security Gate / Dependency Audit`
+- `Security Gate / CodeQL Static Analysis`
+- `Security Gate / OSSF Scorecard`
+- `Security Gate / AI Pattern Scan`
+- `Merge Gate — Owner Approval / Await Owner Approval`
+
+Settings: enforce_admins=true, 1 required review (dismiss stale, require CODEOWNER), no force pushes, no deletions.
