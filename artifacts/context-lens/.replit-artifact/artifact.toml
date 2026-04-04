@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "ContextLens"
+version = "1.0.0"
+id = "artifacts/context-lens"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24348
+
+[services.development]
+run = "pnpm --filter @workspace/context-lens run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/context-lens", "run", "build" ]
+publicDir = "artifacts/context-lens/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24348"
+BASE_PATH = "/"

@@ -1,27 +1,53 @@
-# Workspace
+# ContextLens
 
-## Overview
+An open-source React+Vite web app that spatially visualizes LLM context management for AI researchers and builders. Fully client-side, no API key required, MIT licensed.
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+## Architecture
 
-## Stack
+- **Monorepo** managed with pnpm workspaces
+- **Frontend**: React + Vite + TypeScript (`artifacts/context-lens/`)
+- **API Server**: Express (`artifacts/api-server/`) — not used by ContextLens itself
+- **No backend needed for ContextLens** — all logic is client-side
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+## ContextLens Feature Set
 
-## Key Commands
+### Three Modes
+1. **Analyze** — Paste a prompt or OpenAI JSON → get a Context Health Score (0–100) with full spatial breakdown
+2. **Explore** — Animated scenario player for 3 pre-built demos (context poisoning, identity drift, multi-agent isolation)
+3. **Simulate** — Side-by-side compression strategy comparison + NIAH (Needle in a Haystack) heatmap
 
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
+### Core Logic (all in `src/lib/`)
+- `scoring.ts` — Context Health Score engine (5-dimension scoring: structure, efficiency, diversity, integrity, compression)
+- `parser.ts` — Parses plain text + OpenAI JSON format into typed `ContextWindow`
+- `tokenizer.ts` — Token estimation + cost calculation (GPT-4o, Claude 3.5, Gemini 2.5, Llama 3.1)
+- `compression.ts` — Three strategies: sliding window, summarization, hard compression
+- `niahData.ts` — NIAH benchmark data + heatmap grid generation
+- `segmentColors.ts` — Per-segment-type color scheme (purple=system, teal=identity, etc.)
+- `history.ts` — localStorage-based score history
+- `models.ts` — Model registry and metadata
 
-See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+### Demo Scenarios (in `src/data/scenarios.ts`)
+- "The Poisoned Agent" — context poisoning demonstration
+- "The Forgotten Soul" — identity/soul drift demonstration  
+- "The Research Harness" — multi-agent context topology
+
+## Design
+- Dark observatory aesthetic (deep navy `#080d1a` background)
+- Dark-mode only — no light mode
+- Framer Motion animations for scenario playback
+- Recharts/CSS Grid for heatmap visualization
+- shadcn/ui components with custom dark theme overrides
+
+## Key Decisions
+- No backend, no auth, no API key needed
+- `wouter` routing not needed — single-page mode switching via React state
+- Google Fonts import must be FIRST line in index.css (PostCSS requirement)
+- CSS custom properties use space-separated HSL values (no `hsl()` wrapper in variable definitions)
+
+## Development
+
+```bash
+pnpm --filter @workspace/context-lens run dev
+```
+
+The app runs on port `24348` by default (configurable via `PORT` env var).
