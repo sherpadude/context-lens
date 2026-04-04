@@ -54,6 +54,10 @@ jobs:
   codeql:
     name: CodeQL Static Analysis
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -70,17 +74,63 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
 
+  scorecard:
+    name: OSSF Scorecard
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      security-events: write
+      id-token: write
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard analysis
+        uses: ossf/scorecard-action@v2.4.0
+        with:
+          results_file: scorecard-results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload Scorecard results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: scorecard-results.sarif
+
   ai-pattern-scan:
     name: AI Pattern Scan
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: |
+            **/*.ts
+            **/*.tsx
+            **/*.js
+            **/*.jsx
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Run AI pattern scan
+      - name: Run AI pattern scan on changed files
+        if: steps.changed-files.outputs.any_changed == 'true'
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
         run: node .github/scripts/ai-pattern-scan.js
+
+      - name: Skip scan (no changed source files)
+        if: steps.changed-files.outputs.any_changed != 'true'
+        run: echo "No TypeScript/JavaScript files changed — skipping AI pattern scan."

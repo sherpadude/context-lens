@@ -3,92 +3,79 @@ name: Issue Triage
 on:
   issues:
     types: [opened]
-  pull_request:
-    types: [opened]
 
 permissions:
   issues: write
-  pull-requests: write
 
 jobs:
-  label-and-greet:
-    name: Auto-label and Greet
+  security-triage:
+    name: Security Issue Detection
     runs-on: ubuntu-latest
     steps:
-      - name: Label bug reports
-        if: github.event_name == 'issues'
+      - name: Detect security keywords and notify
         uses: actions/github-script@v7
         with:
           script: |
-            const body = context.payload.issue.body || "";
             const title = context.payload.issue.title || "";
-            const labels = [];
+            const body  = context.payload.issue.body  || "";
+            const text  = (title + " " + body).toLowerCase();
 
-            if (/bug|error|broken|crash|fail/i.test(title + body)) {
-              labels.push("bug");
-            }
-            if (/feature|enhancement|add|improve|support/i.test(title + body)) {
-              labels.push("enhancement");
-            }
-            if (/question|how|help|explain/i.test(title + body)) {
-              labels.push("question");
-            }
-            if (/security|vulnerability|cve|exploit/i.test(title + body)) {
-              labels.push("security");
-            }
-            if (/docs|documentation|readme/i.test(title + body)) {
-              labels.push("documentation");
-            }
+            const securityKeywords = [
+              "security", "vulnerability", "cve", "exploit", "injection",
+              "xss", "csrf", "rce", "sqli", "bypass", "leak", "exposure",
+              "malicious", "attack", "payload", "overflow", "disclosure",
+            ];
 
-            if (labels.length > 0) {
+            const isSecurityReport = securityKeywords.some((kw) => text.includes(kw));
+
+            if (isSecurityReport) {
+              // Add security label
               await github.rest.issues.addLabels({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.payload.issue.number,
-                labels,
+                labels: ["security"],
               });
-            }
 
-      - name: Welcome new contributors on issues
-        if: github.event_name == 'issues'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const sender = context.payload.sender.login;
-            const { data: issues } = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              creator: sender,
-              state: "all",
-            });
-
-            if (issues.length === 1) {
+              // Post standard security disclosure comment
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.payload.issue.number,
-                body: `Thanks for opening your first issue, @${sender}! 🎉\n\nWe'll review this as soon as possible. In the meantime, please check [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md) if you'd like to help fix it yourself.`,
+                body: [
+                  "## Security Report Detected",
+                  "",
+                  "Thank you for your report. It appears this issue may describe a security concern.",
+                  "",
+                  "> **Please do not include exploit details, proof-of-concept code, or reproduction steps in this public issue.**",
+                  "",
+                  "ContextLens follows a responsible disclosure policy. If this is a vulnerability report, please:",
+                  "",
+                  "1. **Close this issue** and instead use [GitHub Private Vulnerability Reporting](../../security/advisories/new), or",
+                  "2. Follow the steps in [SECURITY.md](../blob/main/SECURITY.md) to contact the maintainer privately.",
+                  "",
+                  "Public issues with exploit details may be closed and locked without further notice to protect users.",
+                  "",
+                  "If this is not a security vulnerability (just a general bug or question), you can ignore this message and continue — we'll review it soon.",
+                ].join("\n"),
               });
-            }
 
-      - name: Welcome new contributors on PRs
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const sender = context.payload.sender.login;
-            const { data: prs } = await github.rest.pulls.list({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: "all",
-            });
+              core.info("Security keyword detected — added 'security' label and posted SECURITY.md disclosure reminder.");
+            } else {
+              // Auto-label other issue types
+              const labels = [];
+              if (/bug|error|broken|crash|fail/i.test(title + body)) labels.push("bug");
+              if (/feature|enhancement|add|improve|support/i.test(title + body)) labels.push("enhancement");
+              if (/question|how|help|explain/i.test(title + body)) labels.push("question");
+              if (/docs|documentation|readme/i.test(title + body)) labels.push("documentation");
 
-            const authorPRs = prs.filter(pr => pr.user.login === sender);
-            if (authorPRs.length === 1) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
-                body: `Thanks for your first PR, @${sender}! 🎉\n\nThe security gate will run automatically. Once all checks pass, a maintainer will review your changes.`,
-              });
+              if (labels.length > 0) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.issue.number,
+                  labels,
+                });
+                core.info(`Added labels: ${labels.join(", ")}`);
+              }
             }

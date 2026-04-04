@@ -1,65 +1,119 @@
-name: Owner Approval Gate
+name: Merge Gate — Owner Approval
+
+# Triggers after the Security Gate workflow completes on a PR.
+# Uses GitHub Environment "production-merge" with @sherpadude as required reviewer.
+# This creates a blocking status check: all security jobs must pass AND the
+# owner must click "Approve" in the GitHub UI before the PR can be merged.
 
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_run:
+    workflows: ["Security Gate"]
+    types: [completed]
 
 permissions:
   pull-requests: write
   statuses: write
+  actions: read
 
 jobs:
-  require-owner-approval:
-    name: Require Owner Review
+  check-security-gate:
+    name: Verify Security Gate Passed
     runs-on: ubuntu-latest
+    outputs:
+      pr_number: ${{ steps.find-pr.outputs.pr_number }}
+      security_passed: ${{ steps.find-pr.outputs.security_passed }}
     steps:
-      - name: Check owner review status
+      - name: Find associated PR and check gate status
+        id: find-pr
         uses: actions/github-script@v7
         with:
           script: |
-            const pr = context.payload.pull_request;
-            const owner = context.repo.owner;
+            const run = context.payload.workflow_run;
+            const conclusion = run.conclusion;
+            const headSHA = run.head_sha;
 
-            // Notify if PR is from a fork (higher scrutiny)
-            if (pr.head.repo.full_name !== pr.base.repo.full_name) {
+            core.info(`Security Gate concluded: ${conclusion} for SHA ${headSHA}`);
+
+            // Find the PR associated with this workflow run
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+            });
+
+            const pr = prs.find((p) => p.head.sha === headSHA);
+            if (!pr) {
+              core.info("No open PR found for this commit — skipping.");
+              core.setOutput("pr_number", "");
+              core.setOutput("security_passed", "false");
+              return;
+            }
+
+            core.setOutput("pr_number", String(pr.number));
+            core.setOutput("security_passed", conclusion === "success" ? "true" : "false");
+
+            if (conclusion !== "success") {
+              // Post failure comment
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: pr.number,
                 body: [
-                  "## 🔒 Owner Review Required",
+                  "## ❌ Merge Gate: Security Checks Failed",
                   "",
-                  "This PR is from a fork. Before it can be merged:",
+                  `The **Security Gate** workflow completed with status: \`${conclusion}\`.`,
                   "",
-                  "1. All **Security Gate** checks must pass",
-                  "2. **@" + owner + "** must approve this PR",
+                  "**This PR cannot be merged until all security checks pass.** Please review the failed checks above and push a fix.",
                   "",
-                  "The security scan will run automatically. Owner review is mandatory — no exceptions.",
+                  "Checks required:",
+                  "- Secret Scanning (Gitleaks)",
+                  "- Dependency Audit (pnpm audit --audit-level=high)",
+                  "- CodeQL Static Analysis",
+                  "- OSSF Scorecard",
+                  "- AI Pattern Scan",
                 ].join("\n"),
               });
             }
 
-      - name: Validate no direct-to-main commits
+  await-owner-approval:
+    name: Await Owner Approval
+    runs-on: ubuntu-latest
+    needs: check-security-gate
+    if: needs.check-security-gate.outputs.security_passed == 'true' && needs.check-security-gate.outputs.pr_number != ''
+    # This environment has @sherpadude as a required reviewer.
+    # GitHub will pause here and send an approval request email/notification.
+    # The job cannot proceed (and the status check cannot pass) until the
+    # owner clicks "Approve" in the GitHub Actions UI.
+    environment: production-merge
+    steps:
+      - name: Security gate passed — notify owner approval required
         uses: actions/github-script@v7
         with:
           script: |
-            const { data: commits } = await github.rest.pulls.listCommits({
+            const prNumber = parseInt("${{ needs.check-security-gate.outputs.pr_number }}");
+
+            await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number,
+              issue_number: prNumber,
+              body: [
+                "## ✅ Security Gate Passed — Awaiting Owner Approval",
+                "",
+                "All automated security checks have passed:",
+                "- ✅ Secret Scanning",
+                "- ✅ Dependency Audit",
+                "- ✅ CodeQL Static Analysis",
+                "- ✅ OSSF Scorecard",
+                "- ✅ AI Pattern Scan",
+                "",
+                "**@sherpadude**: This PR is waiting for your approval in the [Actions tab](../../actions). ",
+                "Navigate to the **Merge Gate** workflow run and click **Review deployments** → **Approve**.",
+                "",
+                "The PR cannot be merged until you approve.",
+              ].join("\n"),
             });
 
-            core.info(`PR has ${commits.length} commit(s) — gate passed.`);
-
-  security-gate-status:
-    name: Security Gate Summary
-    runs-on: ubuntu-latest
-    needs: [require-owner-approval]
-    steps:
-      - name: Post gate status
-        uses: actions/github-script@v7
-        with:
-          script: |
-            core.info("Owner approval gate: PASSED — all checks ran successfully.");
-            core.info("Final merge requires: (1) security-scan passing + (2) owner approval.");
+      - name: Owner approved — merge gate cleared
+        run: |
+          echo "Owner approval received. Merge gate cleared."
+          echo "PR ${{ needs.check-security-gate.outputs.pr_number }} is now approved for merge."

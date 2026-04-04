@@ -2,13 +2,16 @@
 /**
  * AI Pattern Scanner for ContextLens
  *
- * Detects patterns that could indicate:
+ * When run in CI with CHANGED_FILES env var set (via tj-actions/changed-files),
+ * scans only the changed files in the PR. Falls back to full scan of the
+ * source directories when run locally or on push to main.
+ *
+ * Detects:
  *   - Prompt injection strings embedded in source code
  *   - Suspicious eval() / Function() usage
  *   - Hard-coded external fetch targets (unexpected APIs)
- *   - Data exfiltration patterns (sending user data externally)
- *
- * Runs as part of the Security Gate on every PR.
+ *   - Data exfiltration patterns (reading storage + external transmit)
+ *   - Hard-coded API key patterns
  */
 
 const fs = require("fs");
@@ -42,7 +45,8 @@ const PATTERNS = [
     name: "Hard-coded External Fetch",
     regex: /fetch\s*\(\s*['"`]https?:\/\/(?!localhost|127\.0\.0\.1)/,
     severity: "MEDIUM",
-    description: "ContextLens should be fully client-side with no external API calls. External fetch detected.",
+    description:
+      "ContextLens should be fully client-side with no external API calls. External fetch detected.",
     allowlist: ["// ai-scan-allow-external"],
   },
   {
@@ -56,25 +60,28 @@ const PATTERNS = [
     name: "Data Exfiltration Pattern",
     regex: /document\.cookie|localStorage\.getItem[^;]*fetch|sendBeacon/,
     severity: "HIGH",
-    description: "Potential data exfiltration pattern: reading storage then transmitting externally.",
+    description:
+      "Potential data exfiltration pattern: reading storage then transmitting externally.",
   },
   {
-    name: "Suspicious postMessage",
+    name: "Suspicious postMessage Wildcard",
     regex: /postMessage\s*\(.*\*\s*\)/,
     severity: "MEDIUM",
     description: "postMessage with wildcard targetOrigin can leak data cross-origin.",
   },
   {
-    name: "Base64 Obfuscation",
-    regex: /atob\s*\(|btoa\s*\(.*eval/,
+    name: "Base64 + Execute Obfuscation",
+    regex: /atob\s*\(.*eval|eval.*atob\s*\(/,
     severity: "MEDIUM",
-    description: "Base64 decode followed by execution suggests code obfuscation.",
+    description: "Base64 decode followed by execution — possible code obfuscation.",
   },
   {
-    name: "Embedded API Key Pattern",
-    regex: /['"`](sk-[a-zA-Z0-9]{32,}|AIza[0-9A-Za-z\-_]{35}|AKIA[0-9A-Z]{16})/,
+    name: "Embedded API Key",
+    regex:
+      /['"`](sk-[a-zA-Z0-9]{32,}|AIza[0-9A-Za-z\-_]{35}|AKIA[0-9A-Z]{16}|ghp_[a-zA-Z0-9]{36})/,
     severity: "CRITICAL",
-    description: "Hard-coded API key pattern detected (OpenAI, Google, AWS).",
+    description:
+      "Hard-coded API key detected (OpenAI / Google / AWS / GitHub PAT).",
   },
 ];
 
@@ -84,7 +91,11 @@ function getAllFiles(dir, extensions) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules") {
+    if (
+      entry.isDirectory() &&
+      !entry.name.startsWith(".") &&
+      entry.name !== "node_modules"
+    ) {
       results.push(...getAllFiles(full, extensions));
     } else if (entry.isFile() && extensions.includes(path.extname(entry.name))) {
       results.push(full);
@@ -94,7 +105,12 @@ function getAllFiles(dir, extensions) {
 }
 
 function scanFile(filePath, patterns) {
-  const content = fs.readFileSync(filePath, "utf-8");
+  let content;
+  try {
+    content = fs.readFileSync(filePath, "utf-8");
+  } catch (e) {
+    return [];
+  }
   const lines = content.split("\n");
   const findings = [];
 
@@ -102,11 +118,7 @@ function scanFile(filePath, patterns) {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (!pattern.regex.test(line)) continue;
-
-      // Check allowlist comments
-      if (pattern.allowlist && pattern.allowlist.some((allow) => line.includes(allow))) {
-        continue;
-      }
+      if (pattern.allowlist && pattern.allowlist.some((a) => line.includes(a))) continue;
 
       findings.push({
         pattern: pattern.name,
@@ -126,8 +138,26 @@ function main() {
   console.log("🔍 ContextLens AI Pattern Scanner");
   console.log("═".repeat(60));
 
-  const allFiles = SCAN_DIRS.flatMap((dir) => getAllFiles(dir, SCAN_EXTENSIONS));
-  console.log(`Scanning ${allFiles.length} files...\n`);
+  let allFiles;
+
+  // When running in CI on a PR, scan only the changed files
+  const changedFilesEnv = process.env.CHANGED_FILES;
+  if (changedFilesEnv && changedFilesEnv.trim()) {
+    allFiles = changedFilesEnv
+      .trim()
+      .split(/\s+/)
+      .filter((f) => SCAN_EXTENSIONS.includes(path.extname(f)));
+    console.log(`Mode: PR diff scan (${allFiles.length} changed file(s))`);
+  } else {
+    // Full scan (push to main or local run)
+    allFiles = SCAN_DIRS.flatMap((dir) => getAllFiles(dir, SCAN_EXTENSIONS));
+    console.log(`Mode: Full source scan (${allFiles.length} file(s))`);
+  }
+
+  if (allFiles.length === 0) {
+    console.log("No relevant files to scan.\n");
+    process.exit(0);
+  }
 
   const allFindings = allFiles.flatMap((f) => scanFile(f, PATTERNS));
 
@@ -143,25 +173,32 @@ function main() {
 
   for (const [sev, findings] of Object.entries(bySeverity)) {
     if (!findings.length) continue;
-    const icon = sev === "CRITICAL" ? "🚨" : sev === "HIGH" ? "❌" : "⚠️";
-    console.log(`${icon} ${sev} (${findings.length} finding${findings.length > 1 ? "s" : ""})`);
+    const icon =
+      sev === "CRITICAL" ? "🚨" : sev === "HIGH" ? "❌" : "⚠️";
+    console.log(
+      `\n${icon} ${sev} (${findings.length} finding${findings.length > 1 ? "s" : ""})`
+    );
     for (const f of findings) {
       console.log(`   Pattern : ${f.pattern}`);
       console.log(`   File    : ${f.file}:${f.line}`);
       console.log(`   Detail  : ${f.description}`);
       console.log(`   Code    : ${f.content}`);
-      console.log();
     }
   }
 
-  const hasCriticalOrHigh = bySeverity.CRITICAL.length + bySeverity.HIGH.length > 0;
+  console.log("\n" + "═".repeat(60));
+  const hasCriticalOrHigh =
+    bySeverity.CRITICAL.length + bySeverity.HIGH.length > 0;
 
-  console.log("═".repeat(60));
   if (hasCriticalOrHigh) {
-    console.log("❌ Scan FAILED — CRITICAL or HIGH findings must be resolved before merge.");
+    console.log(
+      "❌ Scan FAILED — CRITICAL or HIGH findings must be resolved before merge."
+    );
     process.exit(1);
   } else {
-    console.log("⚠️  Scan completed with MEDIUM findings. Review before merge.");
+    console.log(
+      "⚠️  Scan completed with MEDIUM findings — review before merge."
+    );
     process.exit(0);
   }
 }
