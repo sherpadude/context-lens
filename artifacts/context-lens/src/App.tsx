@@ -3,16 +3,28 @@ import TopNav from "@/components/TopNav";
 import AnalyzePage from "@/pages/AnalyzePage";
 import ExplorePage from "@/pages/ExplorePage";
 import SimulatePage from "@/pages/SimulatePage";
-import { AppMode } from "@/types";
+import { AppMode, ModelId } from "@/types";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+export interface PreloadedContext {
+  input: string;
+  model: ModelId;
+  label?: string;
+}
+
 function App() {
   const [activeMode, setActiveMode] = useState<AppMode>("analyze");
+  const [preloadedContext, setPreloadedContext] = useState<PreloadedContext | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.add("dark");
   }, []);
+
+  const handleLoadIntoAnalyze = (ctx: PreloadedContext) => {
+    setPreloadedContext(ctx);
+    setActiveMode("analyze");
+  };
 
   return (
     <TooltipProvider>
@@ -21,15 +33,19 @@ function App() {
         <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {activeMode === "analyze" && (
             <div className="flex-1 overflow-y-auto">
-              <AnalyzePage onNavigateToExplore={() => setActiveMode("explore")} />
+              <AnalyzePage
+                onNavigateToExplore={() => setActiveMode("explore")}
+                preloadedContext={preloadedContext}
+                onPreloadConsumed={() => setPreloadedContext(null)}
+              />
             </div>
           )}
           {activeMode === "explore" && (
-            <ExplorePage onNavigateToAnalyze={() => setActiveMode("analyze")} />
+            <ExplorePage onLoadIntoAnalyze={handleLoadIntoAnalyze} />
           )}
           {activeMode === "simulate" && (
             <div className="flex-1 overflow-y-auto">
-              <SimulatePage />
+              <SimulatePage onLoadIntoAnalyze={handleLoadIntoAnalyze} />
             </div>
           )}
         </main>

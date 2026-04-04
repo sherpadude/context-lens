@@ -14,8 +14,13 @@ import { getHeatmapGrid, accuracyToColor } from "@/lib/niahData";
 import { formatTokenCount, formatCost } from "@/lib/tokenizer";
 import { getSegmentColor } from "@/lib/segmentColors";
 import { Scissors, FileText, Minimize2, Activity, Settings2, Sparkles, AlertTriangle } from "lucide-react";
+import type { PreloadedContext } from "@/App";
 
-export default function SimulatePage() {
+interface SimulatePageProps {
+  onLoadIntoAnalyze?: (ctx: PreloadedContext) => void;
+}
+
+export default function SimulatePage({ onLoadIntoAnalyze }: SimulatePageProps = {}) {
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>(SCENARIOS[1].id); // Default to Forgotten Soul
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [heatmapModel, setHeatmapModel] = useState<ModelId>("gpt4o");
@@ -159,16 +164,39 @@ export default function SimulatePage() {
             <div className="text-sm text-muted-foreground">Select a scenario to test compression against.</div>
           </div>
           
-          <Select value={selectedScenarioId} onValueChange={setSelectedScenarioId}>
-            <SelectTrigger className="w-[280px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SCENARIOS.map(s => (
-                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Select value={selectedScenarioId} onValueChange={setSelectedScenarioId}>
+              <SelectTrigger className="w-[280px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SCENARIOS.map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {onLoadIntoAnalyze && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 shrink-0"
+                onClick={() => {
+                  const scenario = getScenario(selectedScenarioId);
+                  if (!scenario) return;
+                  const messages = scenario.turns.map(t => ({ role: t.role, content: t.content }));
+                  onLoadIntoAnalyze({
+                    input: JSON.stringify(messages, null, 2),
+                    model: scenario.model,
+                    label: scenario.name,
+                  });
+                }}
+                data-testid="button-analyze-in-analyze"
+              >
+                <Activity className="h-3.5 w-3.5" /> Analyze
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Base State Ref */}

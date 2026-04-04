@@ -4,10 +4,28 @@ import { MODELS } from "./models";
 
 interface OpenAIMessage {
   role: "system" | "user" | "assistant" | "tool" | "function";
-  content: string | null;
+  content: string | null | Array<{ type: string; text?: string }>;
   name?: string;
   tool_call_id?: string;
   tool_calls?: { id: string; type: string; function: { name: string; arguments: string } }[];
+}
+
+/** Anthropic SDK / Messages API format */
+interface AnthropicFormat {
+  model?: string;
+  system?: string | Array<{ type: string; text: string }>;
+  messages: Array<{
+    role: "user" | "assistant";
+    content: string | Array<{ type: string; text?: string }>;
+  }>;
+}
+
+function extractText(
+  content: string | null | Array<{ type: string; text?: string }>
+): string {
+  if (!content) return "";
+  if (typeof content === "string") return content;
+  return content.map((c) => c.text || "").join(" ");
 }
 
 function classifySegment(
@@ -16,7 +34,7 @@ function classifySegment(
   totalMessages: number
 ): SegmentType {
   if (msg.role === "system") {
-    const content = msg.content?.toLowerCase() || "";
+    const content = extractText(msg.content).toLowerCase();
     if (
       content.includes("identity") ||
       content.includes("persona") ||
@@ -31,7 +49,7 @@ function classifySegment(
   }
 
   if (msg.role === "tool" || msg.name?.startsWith("tool")) {
-    const content = msg.content?.toLowerCase() || "";
+    const content = extractText(msg.content).toLowerCase();
     if (content.length > 500) return "rag";
     return "tools";
   }
@@ -46,7 +64,7 @@ function classifySegment(
 }
 
 function detectFailedAttempt(msg: OpenAIMessage): boolean {
-  const content = (msg.content || "").toLowerCase();
+  const content = extractText(msg.content).toLowerCase();
   const failureKeywords = [
     "i made an error",
     "i apologize",
@@ -67,10 +85,7 @@ function messageToSegment(
   index: number,
   totalMessages: number
 ): ContextSegment {
-  const content = Array.isArray(msg.content)
-    ? msg.content.map((c: { text?: string }) => c.text || "").join(" ")
-    : msg.content || "";
-
+  const content = extractText(msg.content);
   const type = classifySegment(msg, index, totalMessages);
   const isFailedAttempt = detectFailedAttempt(msg);
 
@@ -95,13 +110,84 @@ function getLabelForType(type: SegmentType, msg: OpenAIMessage, index: number): 
   switch (type) {
     case "system": return "System Prompt";
     case "identity": return "Identity / Soul File";
-    case "tools": return `Tool Result`;
-    case "rag": return `RAG Document`;
+    case "tools": return "Tool Result";
+    case "rag": return "RAG Document";
     case "history-recent": return `Turn ${index} (Recent)`;
     case "history-old": return `Turn ${index} (Old)`;
     case "response": return "Response";
     case "summary": return "Compressed Summary";
     default: return `Message ${index}`;
+  }
+}
+
+/** Detect and parse Anthropic Messages API format */
+function isAnthropicFormat(parsed: unknown): parsed is AnthropicFormat {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+  const obj = parsed as Record<string, unknown>;
+  return Array.isArray(obj.messages) && ("system" in obj || "model" in obj);
+}
+
+function parseAnthropicFormat(parsed: AnthropicFormat, model: ModelId): ContextWindow {
+  const segments: ContextSegment[] = [];
+
+  // Add system field as system/identity segment if present
+  if (parsed.system) {
+    const systemText =
+      typeof parsed.system === "string"
+        ? parsed.system
+        : parsed.system.map((b) => b.text || "").join(" ");
+    const lc = systemText.toLowerCase();
+    const segType: SegmentType =
+      lc.includes("identity") ||
+      lc.includes("persona") ||
+      lc.includes("you are") ||
+      lc.includes("soul") ||
+      lc.includes("values:")
+        ? "identity"
+        : "system";
+    segments.push({
+      id: "seg-system",
+      type: segType,
+      label: segType === "identity" ? "Identity / Soul File" : "System Prompt",
+      content: systemText,
+      tokenCount: estimateTokens(systemText),
+      turnIndex: -1,
+      metadata: { isIdentityFile: segType === "identity" },
+    });
+  }
+
+  const msgs = parsed.messages;
+  msgs.forEach((msg, i) => {
+    const openAIMsg: OpenAIMessage = {
+      role: msg.role,
+      content: msg.content,
+    };
+    segments.push(messageToSegment(openAIMsg, i, msgs.length));
+  });
+
+  const totalTokens = segments.reduce((sum, s) => sum + s.tokenCount, 0);
+  return {
+    segments,
+    totalTokens,
+    modelMaxTokens: MODELS[model].maxTokens,
+    model,
+  };
+}
+
+/** Parse JSONL (one JSON object per line) as a conversation */
+function parseJSONL(input: string, model: ModelId): ContextWindow | null {
+  const lines = input.trim().split("\n").filter((l) => l.trim());
+  if (lines.length < 2) return null;
+  try {
+    const parsed = lines.map((l) => JSON.parse(l));
+    // Expect each line to have a role field (OpenAI-like)
+    if (!parsed.every((p) => typeof p.role === "string")) return null;
+    const messages = parsed as OpenAIMessage[];
+    const segments = messages.map((msg, i) => messageToSegment(msg, i, messages.length));
+    const totalTokens = segments.reduce((sum, s) => sum + s.tokenCount, 0);
+    return { segments, totalTokens, modelMaxTokens: MODELS[model].maxTokens, model };
+  } catch {
+    return null;
   }
 }
 
@@ -111,7 +197,14 @@ export function parseOpenAIFormat(
 ): ContextWindow | null {
   try {
     const parsed = JSON.parse(input);
-    const messages: OpenAIMessage[] = Array.isArray(parsed)
+
+    // Anthropic format: { system?, messages: [...] }
+    if (isAnthropicFormat(parsed)) {
+      return parseAnthropicFormat(parsed, model);
+    }
+
+    // OpenAI / generic array or { messages: [...] }
+    const messages: OpenAIMessage[] | null = Array.isArray(parsed)
       ? parsed
       : parsed.messages || parsed.conversation || null;
 
@@ -162,10 +255,19 @@ export function parsePlainText(
 
 export function parseInput(input: string, model: ModelId = "gpt4o"): ContextWindow {
   const trimmed = input.trim();
+
+  // Try JSONL first (multi-line, starts with {)
+  if (trimmed.startsWith("{") && trimmed.includes("\n")) {
+    const jsonl = parseJSONL(trimmed, model);
+    if (jsonl) return jsonl;
+  }
+
+  // Try JSON (array or object)
   if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
     const parsed = parseOpenAIFormat(input, model);
     if (parsed) return parsed;
   }
+
   return parsePlainText(input, model);
 }
 

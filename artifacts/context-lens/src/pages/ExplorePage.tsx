@@ -18,12 +18,13 @@ import {
   Cpu,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import type { PreloadedContext } from "@/App";
 
 interface ExplorePageProps {
-  onNavigateToAnalyze: () => void;
+  onLoadIntoAnalyze: (ctx: PreloadedContext) => void;
 }
 
-export default function ExplorePage({ onNavigateToAnalyze }: ExplorePageProps) {
+export default function ExplorePage({ onLoadIntoAnalyze }: ExplorePageProps) {
   const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
 
   if (activeScenarioId) {
@@ -33,7 +34,7 @@ export default function ExplorePage({ onNavigateToAnalyze }: ExplorePageProps) {
       <ScenarioPlayer
         scenario={scenario}
         onBack={() => setActiveScenarioId(null)}
-        onLoadAnalyze={onNavigateToAnalyze}
+        onLoadAnalyze={onLoadIntoAnalyze}
       />
     );
   }
@@ -97,7 +98,7 @@ function ScenarioPlayer({
 }: {
   scenario: Scenario;
   onBack: () => void;
-  onLoadAnalyze: () => void;
+  onLoadAnalyze: (ctx: PreloadedContext) => void;
 }) {
   const [turnIndex, setTurnIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -195,7 +196,15 @@ function ScenarioPlayer({
         )}
 
         <button
-          onClick={onLoadAnalyze}
+          onClick={() => {
+            const turns = activeTurns.slice(0, turnIndex + 1);
+            const messages = turns.map((t) => ({ role: t.role, content: t.content }));
+            onLoadAnalyze({
+              input: JSON.stringify(messages, null, 2),
+              model: scenario.model,
+              label: scenario.name,
+            });
+          }}
           className="shrink-0 text-xs text-muted-foreground hover:text-primary transition-colors"
         >
           Open in Analyze
@@ -299,7 +308,15 @@ function ScenarioPlayer({
                     </ul>
                   </div>
                   <button
-                    onClick={onLoadAnalyze}
+                    onClick={() => {
+                      const turns = activeTurns.slice(0, turnIndex + 1);
+                      const messages = turns.map((t) => ({ role: t.role, content: t.content }));
+                      onLoadAnalyze({
+                        input: JSON.stringify(messages, null, 2),
+                        model: scenario.model,
+                        label: scenario.name,
+                      });
+                    }}
                     className="w-full mt-2 py-2 rounded-lg border border-border text-sm hover:bg-muted/50 transition-colors"
                   >
                     Analyze this scenario in detail
