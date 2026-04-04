@@ -51,3 +51,30 @@ pnpm --filter @workspace/context-lens run dev
 ```
 
 The app runs on port `24348` by default (configurable via `PORT` env var).
+
+## GitHub / Git Workflow
+
+- **Public repo**: https://github.com/sherpadude/context-lens
+- **Branch**: `main` — protected; requires 1 owner approval + all security checks passing
+- **CODEOWNERS**: all files require `@sherpadude` review
+- **Local git**: Replit manages commits automatically at task end
+
+### Pushing to GitHub
+
+Non-workflow files (TypeScript, CSS, etc.) are pushed via the GitHub connector API after each task. For workflow YAML files specifically, pushing requires a PAT with the `workflow` scope:
+
+```bash
+# One-time setup (store in GITHUB_PAT secret):
+git remote add origin https://$GITHUB_PAT@github.com/sherpadude/context-lens.git
+git push --force origin main
+```
+
+Store the PAT as the `GITHUB_PAT` environment secret in Replit. Once set, the agent can use it for all future git pushes.
+
+### Security Gate (GitHub Actions — pending workflow scope push)
+Workflows are created locally in `.github/workflows/` and need to be pushed to GitHub:
+- `security-scan.yml` — Gitleaks + pnpm audit + CodeQL + AI pattern scan
+- `issue-triage.yml` — auto-labeling + first-contributor greeting
+- `merge-gate.yml` — owner approval enforcement
+
+Push them with: `git push --force origin main` (requires `GITHUB_PAT` with `workflow` scope)
