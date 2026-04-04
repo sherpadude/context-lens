@@ -18,14 +18,17 @@ import { getSegmentColor } from "@/lib/segmentColors";
 import { saveToHistory } from "@/lib/history";
 import { useToast } from "@/hooks/use-toast";
 import type { PreloadedContext } from "@/App";
+import { encodeShareURL, exportReportPNG } from "@/lib/share";
+import { Link2, ImageDown } from "lucide-react";
 
 interface AnalyzePageProps {
   onNavigateToExplore: () => void;
   preloadedContext?: PreloadedContext | null;
   onPreloadConsumed?: () => void;
+  onReportChange?: (report: HealthReport | null) => void;
 }
 
-export default function AnalyzePage({ onNavigateToExplore, preloadedContext, onPreloadConsumed }: AnalyzePageProps) {
+export default function AnalyzePage({ onNavigateToExplore, preloadedContext, onPreloadConsumed, onReportChange }: AnalyzePageProps) {
   const [input, setInput] = useState("");
   const [model, setModel] = useState<ModelId>("gpt4o");
   const [report, setReport] = useState<HealthReport | null>(null);
@@ -33,16 +36,21 @@ export default function AnalyzePage({ onNavigateToExplore, preloadedContext, onP
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  const applyReport = (r: HealthReport | null) => {
+    setReport(r);
+    onReportChange?.(r);
+  };
+
   // Auto-load and analyze when a preloaded context arrives (e.g. from Explore)
   useEffect(() => {
     if (preloadedContext) {
       setInput(preloadedContext.input);
       setModel(preloadedContext.model);
-      setReport(null);
+      applyReport(null);
       // Auto-analyze on next tick so state is settled
       setTimeout(() => {
         const ctx = parseInput(preloadedContext.input, preloadedContext.model);
-        setReport(analyzeContext(ctx));
+        applyReport(analyzeContext(ctx));
       }, 50);
       onPreloadConsumed?.();
     }
@@ -51,7 +59,7 @@ export default function AnalyzePage({ onNavigateToExplore, preloadedContext, onP
   const handleAnalyze = () => {
     if (!input.trim()) return;
     const ctx = parseInput(input, model);
-    setReport(analyzeContext(ctx));
+    applyReport(analyzeContext(ctx));
   };
 
   /** Serialize a scenario's turns to OpenAI-format JSON and analyze it */
@@ -63,10 +71,9 @@ export default function AnalyzePage({ onNavigateToExplore, preloadedContext, onP
     const scenarioModel = scenario.model ?? "gpt4o";
     setInput(json);
     setModel(scenarioModel);
-    setReport(null);
-    // Auto-analyze
+    applyReport(null);
     const ctx = parseInput(json, scenarioModel);
-    setReport(analyzeContext(ctx));
+    applyReport(analyzeContext(ctx));
   };
 
   /** Read a .txt / .json / .jsonl file and load its content into the textarea */
@@ -273,7 +280,7 @@ export default function AnalyzePage({ onNavigateToExplore, preloadedContext, onP
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setReport(null)}
+            onClick={() => applyReport(null)}
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" /> Back
@@ -281,12 +288,32 @@ export default function AnalyzePage({ onNavigateToExplore, preloadedContext, onP
           <div className="w-px h-5 bg-border" />
           <h1 className="text-xl font-bold tracking-tight">Context Health Report</h1>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={copyReport} className="gap-2 text-xs" data-testid="button-copy-report">
-            <Copy className="h-3.5 w-3.5" /> Copy Report
+        <div className="flex gap-2 flex-wrap justify-end">
+          <Button
+            variant="outline" size="sm"
+            onClick={() => {
+              const url = encodeShareURL(input, model);
+              navigator.clipboard.writeText(url);
+              toast({ title: "Share Link Copied", description: "Anyone with this link can load and analyze the same context." });
+            }}
+            className="gap-1.5 text-xs"
+            data-testid="button-share-report"
+          >
+            <Link2 className="h-3.5 w-3.5" /> Share Link
           </Button>
-          <Button variant="outline" size="sm" onClick={saveReport} className="gap-2 text-xs" data-testid="button-save-report">
-            <Save className="h-3.5 w-3.5" /> Save to History
+          <Button
+            variant="outline" size="sm"
+            onClick={() => { exportReportPNG(report); toast({ title: "Exporting PNG…", description: "Your report image will download shortly." }); }}
+            className="gap-1.5 text-xs"
+            data-testid="button-export-png"
+          >
+            <ImageDown className="h-3.5 w-3.5" /> Export PNG
+          </Button>
+          <Button variant="outline" size="sm" onClick={copyReport} className="gap-1.5 text-xs" data-testid="button-copy-report">
+            <Copy className="h-3.5 w-3.5" /> Copy
+          </Button>
+          <Button variant="outline" size="sm" onClick={saveReport} className="gap-1.5 text-xs" data-testid="button-save-report">
+            <Save className="h-3.5 w-3.5" /> Save
           </Button>
         </div>
       </div>

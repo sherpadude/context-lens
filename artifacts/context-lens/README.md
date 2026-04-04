@@ -24,7 +24,7 @@ LLMs have a fixed context window. What you put in it — and in what order — d
 - **NIAH heatmap** — visualize needle-in-a-haystack retrieval degradation across context lengths
 - **Cross-mode transfer** — click "Open in Analyze" from Explore to analyze the current scenario state
 - **Local history** — save and revisit past reports from the History dropdown
-- **WebSocket connect** — hook up a live agent for real-time context streaming (experimental)
+- **WebSocket connect** — experimental UI placeholder for future live agent streaming (no real WebSocket handshake yet)
 
 ## Supported Input Formats
 

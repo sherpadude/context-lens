@@ -3,9 +3,10 @@ import TopNav from "@/components/TopNav";
 import AnalyzePage from "@/pages/AnalyzePage";
 import ExplorePage from "@/pages/ExplorePage";
 import SimulatePage from "@/pages/SimulatePage";
-import { AppMode, ModelId } from "@/types";
+import { AppMode, ModelId, HealthReport } from "@/types";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { decodeShareURL, clearShareHash } from "@/lib/share";
 
 export interface PreloadedContext {
   input: string;
@@ -16,9 +17,20 @@ export interface PreloadedContext {
 function App() {
   const [activeMode, setActiveMode] = useState<AppMode>("analyze");
   const [preloadedContext, setPreloadedContext] = useState<PreloadedContext | null>(null);
+  const [currentReport, setCurrentReport] = useState<HealthReport | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.add("dark");
+  }, []);
+
+  // Decode a shared URL hash on initial load
+  useEffect(() => {
+    const shared = decodeShareURL();
+    if (shared) {
+      setPreloadedContext({ input: shared.input, model: shared.model as ModelId });
+      setActiveMode("analyze");
+      clearShareHash();
+    }
   }, []);
 
   const handleLoadIntoAnalyze = (ctx: PreloadedContext) => {
@@ -29,7 +41,7 @@ function App() {
   return (
     <TooltipProvider>
       <div className="h-[100dvh] w-full flex flex-col bg-background text-foreground selection:bg-primary/30 overflow-hidden">
-        <TopNav activeMode={activeMode} onModeChange={setActiveMode} />
+        <TopNav activeMode={activeMode} onModeChange={setActiveMode} currentReport={currentReport} />
         <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {activeMode === "analyze" && (
             <div className="flex-1 overflow-y-auto">
@@ -37,6 +49,7 @@ function App() {
                 onNavigateToExplore={() => setActiveMode("explore")}
                 preloadedContext={preloadedContext}
                 onPreloadConsumed={() => setPreloadedContext(null)}
+                onReportChange={setCurrentReport}
               />
             </div>
           )}

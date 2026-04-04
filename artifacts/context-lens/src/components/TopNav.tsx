@@ -1,5 +1,5 @@
 import { Telescope, ChevronDown, Clock, Plug, Wifi, WifiOff, X } from "lucide-react";
-import { AppMode, ScoreHistoryEntry } from "@/types";
+import { AppMode, ScoreHistoryEntry, HealthReport } from "@/types";
 import { Button } from "@/components/ui/button";
 import { loadHistory, formatTimestamp } from "@/lib/history";
 import { useEffect, useState } from "react";
@@ -16,9 +16,10 @@ import { scoreColor } from "@/lib/scoring";
 interface TopNavProps {
   activeMode: AppMode;
   onModeChange: (mode: AppMode) => void;
+  currentReport?: HealthReport | null;
 }
 
-export default function TopNav({ activeMode, onModeChange }: TopNavProps) {
+export default function TopNav({ activeMode, onModeChange, currentReport }: TopNavProps) {
   const [history, setHistory] = useState<ScoreHistoryEntry[]>([]);
   const [showConnect, setShowConnect] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -28,38 +29,75 @@ export default function TopNav({ activeMode, onModeChange }: TopNavProps) {
     setHistory(loadHistory());
   }, [activeMode]);
 
+  const scoreStrokeColor = currentReport
+    ? currentReport.score >= 85 ? "#22c55e"
+      : currentReport.score >= 70 ? "#84cc16"
+      : currentReport.score >= 50 ? "#eab308"
+      : currentReport.score >= 30 ? "#f97316"
+      : "#ef4444"
+    : undefined;
+
   return (
     <>
       <header className="shrink-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="px-4 md:px-6 flex h-14 max-w-screen-2xl mx-auto items-center">
-          <div className="flex items-center gap-2 mr-6">
+        <div className="px-4 md:px-6 flex h-14 max-w-screen-2xl mx-auto items-center gap-3">
+
+          {/* Logo */}
+          <div className="flex items-center gap-2 mr-4 shrink-0">
             <Telescope className="h-5 w-5 text-primary" />
-            <span className="font-bold text-lg tracking-tight text-foreground">ContextLens</span>
+            <span className="font-bold text-lg tracking-tight text-foreground hidden sm:block">ContextLens</span>
           </div>
 
+          {/* Mode tabs */}
           <nav className="flex items-center space-x-1">
             {(["analyze", "explore", "simulate"] as AppMode[]).map((mode) => (
               <button
                 key={mode}
                 onClick={() => onModeChange(mode)}
                 data-testid={`tab-${mode}`}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors capitalize ${
                   activeMode === mode
                     ? "bg-primary/15 text-primary border border-primary/25"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
                 }`}
               >
-                {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                {mode}
               </button>
             ))}
           </nav>
 
-          <div className="flex flex-1 items-center justify-end gap-2">
-            <span className="text-xs text-muted-foreground hidden lg:block opacity-60 mr-2">
-              Visualize your context. Engineer it.
-            </span>
+          {/* Persistent Score Indicator — shown when a report is active */}
+          {currentReport && (
+            <div
+              className="flex items-center gap-2 ml-2 px-3 py-1 rounded-full border border-border/50 bg-muted/30"
+              data-testid="score-indicator"
+            >
+              {/* Mini SVG ring */}
+              <svg width="20" height="20" viewBox="0 0 20 20" className="-rotate-90 shrink-0">
+                <circle cx="10" cy="10" r="7" fill="none" stroke="hsl(var(--muted))" strokeWidth="2.5" />
+                <circle
+                  cx="10" cy="10" r="7" fill="none" strokeWidth="2.5" strokeLinecap="round"
+                  style={{
+                    stroke: scoreStrokeColor,
+                    strokeDasharray: `${(currentReport.score / 100) * 43.98} 43.98`,
+                    transition: "stroke-dasharray 0.5s ease-out",
+                  }}
+                />
+              </svg>
+              <span
+                className="text-sm font-mono font-bold leading-none"
+                style={{ color: scoreStrokeColor }}
+              >
+                {currentReport.score}
+              </span>
+              <span className="text-xs text-muted-foreground hidden md:block capitalize">
+                {currentReport.scoreLabel}
+              </span>
+            </div>
+          )}
 
-            {/* Connect / Live Eval Button */}
+          <div className="flex flex-1 items-center justify-end gap-2">
+            {/* Connect button — experimental placeholder for future WebSocket integration */}
             <button
               onClick={() => setShowConnect(!showConnect)}
               data-testid="button-connect"
@@ -119,9 +157,9 @@ export default function TopNav({ activeMode, onModeChange }: TopNavProps) {
         </div>
       </header>
 
-      {/* Connect Panel */}
+      {/* Connect Panel — experimental UI for future WebSocket integration */}
       {showConnect && (
-        <div className="shrink-0 border-b border-emerald-500/20 bg-emerald-950/20 backdrop-blur px-4 md:px-6 py-3">
+        <div className="shrink-0 border-b border-border/50 bg-card/60 backdrop-blur px-4 md:px-6 py-3">
           <div className="max-w-screen-2xl mx-auto flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <div className="flex items-center gap-2 shrink-0">
               {connected ? (
@@ -129,8 +167,8 @@ export default function TopNav({ activeMode, onModeChange }: TopNavProps) {
               ) : (
                 <WifiOff className="h-4 w-4 text-muted-foreground" />
               )}
-              <span className="text-sm font-semibold text-foreground">Live Evaluation Mode</span>
-              {connected && <span className="text-xs text-emerald-400 font-mono">● STREAMING</span>}
+              <span className="text-sm font-semibold text-foreground">Live Context Stream</span>
+              <span className="text-[10px] text-amber-400 font-mono bg-amber-500/10 px-1.5 py-0.5 rounded">EXPERIMENTAL</span>
             </div>
 
             <div className="flex flex-1 items-center gap-2 w-full sm:w-auto">
@@ -147,7 +185,7 @@ export default function TopNav({ activeMode, onModeChange }: TopNavProps) {
                 className={`shrink-0 px-3 py-1.5 rounded text-xs font-semibold transition-colors ${
                   connected
                     ? "bg-muted text-muted-foreground hover:bg-destructive/20 hover:text-destructive"
-                    : "bg-emerald-600 hover:bg-emerald-500 text-white"
+                    : "bg-primary/80 hover:bg-primary text-white"
                 }`}
               >
                 {connected ? "Disconnect" : "Connect"}
@@ -155,7 +193,7 @@ export default function TopNav({ activeMode, onModeChange }: TopNavProps) {
             </div>
 
             <p className="text-xs text-muted-foreground hidden md:block max-w-xs shrink-0">
-              Stream real-time context from any agent. ContextLens will score and visualize each turn as it arrives.
+              Planned: stream context snapshots from a live agent to see real-time scoring updates.
             </p>
 
             <button onClick={() => setShowConnect(false)} className="shrink-0 text-muted-foreground hover:text-foreground">
