@@ -6,6 +6,16 @@
 [![Security Gate](https://github.com/sherpadude/context-lens/actions/workflows/security-scan.yml/badge.svg)](https://github.com/sherpadude/context-lens/actions/workflows/security-scan.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
+## Quick Start
+
+New to ContextLens? Here's the fastest path to your first insight:
+
+1. **Pick a scenario** — Choose *Beginner*, *Builder*, or *Researcher* on the Analyze tab to load a pre-built conversation with known issues.
+2. **Read the health report** — The score (0–100) reflects four structural failure modes: Identity Drift, Primacy/Recency Loss, Poison Survival, and Compression Waste.
+3. **Try the fix** — Head to **Explore** for guided walkthroughs, or **Live Lab** to watch compression fire in real time.
+
+No account needed. Runs entirely in your browser — no data is sent anywhere.
+
 ## What is ContextLens?
 
 LLMs have a fixed context window. What you put in it — and in what order — dramatically affects output quality. ContextLens makes this concrete and visual:
