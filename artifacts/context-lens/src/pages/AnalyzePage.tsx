@@ -11,7 +11,7 @@ import { parseInput } from "@/lib/parser";
 import { analyzeContext } from "@/lib/scoring";
 import {
   Upload, Activity, AlertTriangle, AlertCircle, FileWarning,
-  Zap, ListChecks, CheckCircle2, Save, Copy, ArrowLeft, FileJson
+  Zap, ListChecks, CheckCircle2, Save, Copy, ArrowLeft, FileJson, Github
 } from "lucide-react";
 import { formatTokenCount, formatCost, estimateCost } from "@/lib/tokenizer";
 import { getSegmentColor } from "@/lib/segmentColors";
@@ -140,6 +140,13 @@ export default function AnalyzePage({ onNavigateToExplore, preloadedContext, onP
     toast({ title: "Saved to History", description: "Report saved locally." });
   };
 
+  const GITHUB_REPO_URL = "https://github.com/context-lens/context-lens";
+
+  const copyRepoLink = () => {
+    navigator.clipboard.writeText(GITHUB_REPO_URL);
+    toast({ title: "Copied!", description: "GitHub repo URL copied to clipboard." });
+  };
+
   /* ─── Empty/Input State ─── */
   if (!report) {
     return (
@@ -149,6 +156,26 @@ export default function AnalyzePage({ onNavigateToExplore, preloadedContext, onP
           <p className="text-lg text-muted-foreground">
             Analyze prompt decay, identity drift, and token economics. Paste your context below to get a spatial health report.
           </p>
+          {/* GitHub repo link */}
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <a
+              href={GITHUB_REPO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Github className="h-3.5 w-3.5" />
+              <span className="font-mono">{GITHUB_REPO_URL.replace("https://", "")}</span>
+            </a>
+            <button
+              onClick={copyRepoLink}
+              className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-muted/50 border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title="Copy repo URL"
+            >
+              <Copy className="h-3 w-3" />
+              Copy
+            </button>
+          </div>
         </div>
 
         <Card className="border-border/50 bg-card/50 backdrop-blur">
