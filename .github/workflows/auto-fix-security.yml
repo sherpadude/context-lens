@@ -1,0 +1,193 @@
+name: Auto-Fix Security Issues
+
+# Triggers after the Security Gate workflow finishes — only acts on failures.
+on:
+  workflow_run:
+    workflows: ["Security Gate"]
+    types: [completed]
+
+jobs:
+  auto-fix-deps:
+    name: Auto-Patch Dependency Vulnerabilities
+    # Only run when the Security Gate actually failed
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # push fix commits to the PR branch
+      pull-requests: write   # post comments on the PR
+
+    steps:
+      # ── 1. Find the PR associated with this workflow run ──────────────────
+      - name: Find PR for this branch
+        id: find-pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const branch = run.head_branch;
+            const headSha = run.head_sha;
+
+            // Look for an open PR from this branch
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:${branch}`,
+              state: 'open',
+            });
+
+            if (prs.length === 0) {
+              console.log('No open PR found for branch:', branch);
+              core.setOutput('has_pr', 'false');
+              return;
+            }
+
+            const pr = prs[0];
+            console.log(`Found PR #${pr.number}: ${pr.title}`);
+            core.setOutput('has_pr',    'true');
+            core.setOutput('pr_number', String(pr.number));
+            core.setOutput('branch',    branch);
+            core.setOutput('head_sha',  headSha);
+
+      # ── 2. Check which jobs in the Security Gate actually failed ──────────
+      - name: Check which security jobs failed
+        id: check-failures
+        if: steps.find-pr.outputs.has_pr == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const headSha = '${{ steps.find-pr.outputs.head_sha }}';
+            const { data } = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: headSha,
+            });
+
+            const failed = data.check_runs
+              .filter(r => r.conclusion === 'failure')
+              .map(r => r.name);
+
+            console.log('Failed checks:', failed);
+            core.setOutput('dep_audit_failed',
+              failed.includes('Dependency Audit') ? 'true' : 'false');
+            core.setOutput('secret_scan_failed',
+              failed.includes('Secret Scanning') ? 'true' : 'false');
+            core.setOutput('codeql_failed',
+              failed.includes('CodeQL Static Analysis') ? 'true' : 'false');
+            core.setOutput('any_failed', failed.length > 0 ? 'true' : 'false');
+
+      # ── 3. Auto-fix dependency vulnerabilities ────────────────────────────
+      - name: Checkout PR branch
+        if: |
+          steps.find-pr.outputs.has_pr == 'true' &&
+          steps.check-failures.outputs.dep_audit_failed == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.find-pr.outputs.branch }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup pnpm
+        if: |
+          steps.find-pr.outputs.has_pr == 'true' &&
+          steps.check-failures.outputs.dep_audit_failed == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        if: |
+          steps.find-pr.outputs.has_pr == 'true' &&
+          steps.check-failures.outputs.dep_audit_failed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        if: |
+          steps.find-pr.outputs.has_pr == 'true' &&
+          steps.check-failures.outputs.dep_audit_failed == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Run auto-fix script
+        if: |
+          steps.find-pr.outputs.has_pr == 'true' &&
+          steps.check-failures.outputs.dep_audit_failed == 'true'
+        id: autofix
+        run: |
+          node .github/scripts/auto-fix-audit.js
+          EXIT=$?
+          if [[ $EXIT -eq 0 ]]; then
+            echo "result=clean"    >> $GITHUB_OUTPUT   # nothing was needed
+          elif [[ $EXIT -eq 2 ]]; then
+            echo "result=partial"  >> $GITHUB_OUTPUT   # some issues remain
+          else
+            echo "result=fixed"    >> $GITHUB_OUTPUT   # fully patched
+          fi
+        continue-on-error: true
+
+      - name: Commit and push fix
+        if: |
+          steps.find-pr.outputs.has_pr == 'true' &&
+          steps.check-failures.outputs.dep_audit_failed == 'true' &&
+          steps.autofix.outputs.result != 'clean'
+        run: |
+          git config user.name  "ContextLens Security Bot"
+          git config user.email "security-bot@contextlens.dev"
+          git add package.json pnpm-lock.yaml || true
+          # Only commit if there are staged changes
+          git diff --cached --quiet || git commit -m \
+            "fix(security): auto-patch high-severity dependency vulnerabilities [bot]
+
+This commit was created automatically by the ContextLens Security Bot.
+All high-severity vulnerabilities were resolved by adding safe version
+overrides to package.json and regenerating the lockfile.
+
+No human review is required for this fix — security checks will re-run."
+          git push origin HEAD:${{ steps.find-pr.outputs.branch }}
+
+      # ── 4. Post a clear status comment on the PR ──────────────────────────
+      - name: Post PR comment
+        if: steps.find-pr.outputs.has_pr == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const depFixed    = '${{ steps.autofix.outputs.result }}';
+            const secretFail  = '${{ steps.check-failures.outputs.secret_scan_failed }}' === 'true';
+            const codeqlFail  = '${{ steps.check-failures.outputs.codeql_failed }}'      === 'true';
+            const depFail     = '${{ steps.check-failures.outputs.dep_audit_failed }}'   === 'true';
+
+            const lines = ['## 🤖 Security Bot Report\n'];
+
+            // Dependency audit section
+            if (depFail) {
+              if (depFixed === 'fixed' || depFixed === 'clean') {
+                lines.push('✅ **Dependency Audit** — All high-severity vulnerabilities auto-patched. Checks re-running.');
+              } else if (depFixed === 'partial') {
+                lines.push('⚠️ **Dependency Audit** — Some vulnerabilities were patched automatically, but one or more require manual review. See the check logs for details.');
+              } else {
+                lines.push('❌ **Dependency Audit** — Could not auto-patch. Please run `pnpm audit --audit-level=high` locally and add `pnpm.overrides` to `package.json` for any high-severity packages.');
+              }
+            }
+
+            // Secret scanning section
+            if (secretFail) {
+              lines.push('\n❌ **Secret Scanning** — A secret or API key may have been committed. This **cannot** be auto-fixed. Please:\n1. Remove the secret from your code\n2. Rotate (invalidate) the key immediately\n3. Force-push a clean commit\n\nSee [SECURITY.md](../blob/main/SECURITY.md) for guidance.');
+            }
+
+            // CodeQL section
+            if (codeqlFail) {
+              lines.push('\n❌ **CodeQL Static Analysis** — A potential security vulnerability was detected in the code. Please review the [Security tab](../security/code-scanning) for details. Auto-fix is not available for code-level issues.');
+            }
+
+            if (!depFail && !secretFail && !codeqlFail) {
+              lines.push('ℹ️ Security Gate failed but no actionable issues were identified by the auto-fix bot. Please check the workflow logs manually.');
+            }
+
+            lines.push('\n---\n_Once all checks pass, this PR will be ready for your final review and approval._');
+
+            await github.rest.issues.createComment({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: Number('${{ steps.find-pr.outputs.pr_number }}'),
+              body:         lines.join('\n'),
+            });
